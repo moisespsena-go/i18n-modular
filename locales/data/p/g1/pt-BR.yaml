@@ -1,0 +1,8 @@
+name: "Nome<\">"
+users*:
+  1: The User
+  0: No Users
+  _~: "{{.Count}} Users"
+x~: "{{tt \"g1.x2\" (funcs)}} The name is {{.name}}"
+x2~: "{{f \"prefix2\"}} The x2!!"
+y@: .x
