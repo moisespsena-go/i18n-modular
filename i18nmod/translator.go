@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/moisespsena/template/common"
+	"github.com/moisespsena/template/html/template"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -148,6 +149,20 @@ func (t *Translator) Translate(tl *T) (r *Result) {
 				}
 			}
 		}
+	}
+
+	if tl.AsTemplateResult && tl.DefaultValue != "" {
+		tpl, err := template.New(tl.Key.Key).Parse(tl.DefaultValue)
+		if err != nil {
+			r.Error = err
+			return
+		}
+		data, err := tpl.ExecuteString(tl.DataValue)
+		if err != nil {
+			r.Error = err
+			return
+		}
+		r.Text = data
 	}
 
 	return
