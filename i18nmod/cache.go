@@ -1,18 +1,19 @@
 package i18nmod
 
 import (
-	"gopkg.in/fatih/set.v0"
 	"sync"
+
+	"gopkg.in/fatih/set.v0"
 )
 
 type Cache struct {
-	Data map[string]map[string]*Result
-	Allowed *set.Set
+	Data    map[string]map[string]*Result
+	Allowed set.Interface
 	*sync.RWMutex
 }
 
 func NewCache() *Cache {
-	return &Cache{Data:make(map[string]map[string]*Result), Allowed: set.New()}
+	return &Cache{Data: make(map[string]map[string]*Result), Allowed: set.New(set.ThreadSafe)}
 }
 
 func (c *Cache) Allow(key string) *Cache {

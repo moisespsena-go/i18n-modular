@@ -1,39 +1,40 @@
 package i18nmod
 
 import (
-	"sync"
 	"fmt"
-	"gopkg.in/fatih/set.v0"
 	"io"
 	"reflect"
 	"strconv"
+	"sync"
+
 	"github.com/moisespsena/template/common"
+	"gopkg.in/fatih/set.v0"
 )
 
 type Translator struct {
-	Backends       []Backend
-	Groups         map[string]map[string]map[string]*Translation
-	ContextFactory func(t *Translator, translate TranslateFunc, lang string, other_langs ... string) Context
+	Backends                 []Backend
+	Groups                   map[string]map[string]map[string]*Translation
+	ContextFactory           func(t *Translator, translate TranslateFunc, lang string, other_langs ...string) Context
 	OnContextCreateCallbacks []func(context Context)
-	Cache          *Cache
+	Cache                    *Cache
 	sync.RWMutex
 }
 
 func NewTranslator() *Translator {
 	return &Translator{
-		Backends: []Backend{},
+		Backends:       []Backend{},
 		ContextFactory: DefaultContextFactory,
-		Cache: NewCache(),
-		OnContextCreateCallbacks:[]func(context Context){},
+		Cache:          NewCache(),
+		OnContextCreateCallbacks: []func(context Context){},
 	}
 }
 
-func (t *Translator) OnContextCreate(callbacks... func(context Context)) *Translator {
+func (t *Translator) OnContextCreate(callbacks ...func(context Context)) *Translator {
 	t.OnContextCreateCallbacks = append(t.OnContextCreateCallbacks, callbacks...)
 	return t
 }
 
-func (t *Translator) AddBackend(backends ... Backend) {
+func (t *Translator) AddBackend(backends ...Backend) {
 	t.Backends = append(t.Backends, backends...)
 }
 
@@ -60,9 +61,9 @@ func (t *Translator) PreloadAll() error {
 	return t.Preload([]string{})
 }
 
-func (t *Translator) Preload(languages []string, names ... string) error {
+func (t *Translator) Preload(languages []string, names ...string) error {
 	if len(languages) == 0 {
-		mn := set.New()
+		mn := set.New(set.ThreadSafe)
 		for _, backend := range t.Backends {
 			for _, lang := range backend.ListLanguages() {
 				mn.Add(lang)
@@ -78,7 +79,7 @@ func (t *Translator) Preload(languages []string, names ... string) error {
 	}
 
 	if len(names) == 0 {
-		mn := set.New()
+		mn := set.New(set.NonThreadSafe)
 		for _, backend := range t.Backends {
 			for _, name := range backend.ListGroups() {
 				mn.Add(name)
@@ -123,7 +124,7 @@ func (t *Translator) Preload(languages []string, names ... string) error {
 	return nil
 }
 
-func (t *Translator) NewContext(lang string, other_langs ... string) (c Context) {
+func (t *Translator) NewContext(lang string, other_langs ...string) (c Context) {
 	c = t.ContextFactory(t, t.Translate, lang, other_langs...)
 	for _, cb := range t.OnContextCreateCallbacks {
 		cb(c)
@@ -156,72 +157,72 @@ func (t *Translator) Dump(writer io.Writer) {
 	d := &Dumper{Writer: writer}
 
 	d.
-	Wl("import (").
+		Wl("import (").
 		With(func(d *Dumper) {
-		d.
-		Wl("\"", reflect.TypeOf(t).Elem().PkgPath(), "\"")
-	}).
+			d.
+				Wl("\"", reflect.TypeOf(t).Elem().PkgPath(), "\"")
+		}).
 		Wl(")").
 		Wl("func Groups() map[string]map[string]map[string]*i18nmod.Translation {").
 		With(func(d *Dumper) {
-		d.Wl("return map[string]map[string]map[string]*i18nmod.Translation {").With(func(d *Dumper) {
-			for gname, langs := range t.Groups {
-				d.Wl("\"", gname, "\": {").
-					With(func(d *Dumper) {
-					for lang, tls := range langs {
-						d.Wl("\"", lang, "\": {").
-							With(func(d *Dumper) {
-							for _, tl := range tls {
-								d.Wl("\"", tl.Key, "\": &i18nmod.Translation{").
+			d.Wl("return map[string]map[string]map[string]*i18nmod.Translation {").With(func(d *Dumper) {
+				for gname, langs := range t.Groups {
+					d.Wl("\"", gname, "\": {").
+						With(func(d *Dumper) {
+							for lang, tls := range langs {
+								d.Wl("\"", lang, "\": {").
 									With(func(d *Dumper) {
-									d.Wl("Key: \"", tl.Key, "\",")
+										for _, tl := range tls {
+											d.Wl("\"", tl.Key, "\": &i18nmod.Translation{").
+												With(func(d *Dumper) {
+													d.Wl("Key: \"", tl.Key, "\",")
 
-									if tl.Value != "" {
-										d.Wl("Value: ", strconv.Quote(tl.Value), ",")
-									} else if tl.ValueTemplate != nil {
-										d.Wl("ValueTemplate: i18nmod.ParseTemplate(", strconv.Quote(tl.ValueTemplate.Template().RawText()), "),")
-									}
+													if tl.Value != "" {
+														d.Wl("Value: ", strconv.Quote(tl.Value), ",")
+													} else if tl.ValueTemplate != nil {
+														d.Wl("ValueTemplate: i18nmod.ParseTemplate(", strconv.Quote(tl.ValueTemplate.Template().RawText()), "),")
+													}
 
-									if tl.Alias != "" {
-										d.Wl("Alias: \"", tl.Alias, "\",")
-									}
+													if tl.Alias != "" {
+														d.Wl("Alias: \"", tl.Alias, "\",")
+													}
 
-									if tl.PluralizeData != nil {
-										d.Wl("PluralizeData: map[interface{}]interface{} {").
-										With(func(d *Dumper) {
-											for k, v := range tl.PluralizeData {
-												d.W()
-												switch kv := k.(type) {
-												case string:
-													d.R("\"", kv, "\":")
-												case int:
-													d.R(strconv.Itoa(kv), ":")
-												}
+													if tl.PluralizeData != nil {
+														d.Wl("PluralizeData: map[interface{}]interface{} {").
+															With(func(d *Dumper) {
+																for k, v := range tl.PluralizeData {
+																	d.W()
+																	switch kv := k.(type) {
+																	case string:
+																		d.R("\"", kv, "\":")
+																	case int:
+																		d.R(strconv.Itoa(kv), ":")
+																	}
 
-												switch vv := v.(type) {
-												case string:
-													d.R(strconv.Quote(vv))
-												case common.TemplateExecutorInterface:
-													d.R("i18nmod.ParseTemplate(", strconv.Quote(vv.Template().RawText()), ")")
-												}
+																	switch vv := v.(type) {
+																	case string:
+																		d.R(strconv.Quote(vv))
+																	case common.TemplateExecutorInterface:
+																		d.R("i18nmod.ParseTemplate(", strconv.Quote(vv.Template().RawText()), ")")
+																	}
 
-												d.R(",\n")
-											}
-										}).
-										Wl("},")
-									}
+																	d.R(",\n")
+																}
+															}).
+															Wl("},")
+													}
 
-								}).
+												}).
+												Wl("},")
+										}
+									}).
 									Wl("},")
 							}
 						}).
-							Wl("},")
-					}
-				}).
-					Wl("},")
-			}
+						Wl("},")
+				}
+			}).
+				Wl("}")
 		}).
-			Wl("}")
-	}).
 		Wl("}")
 }

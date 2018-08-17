@@ -6,13 +6,14 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"gopkg.in/yaml.v2"
-	"github.com/moisespsena/go-i18n-modular/i18nmod"
-	"github.com/nicksnyder/go-i18n/i18n/language"
 	"path/filepath"
-	"github.com/moisespsena/template/text/template"
 	"strconv"
+
+	"github.com/moisespsena/go-i18n-modular/i18nmod"
+	"github.com/moisespsena/template/text/template"
+	"github.com/nicksnyder/go-i18n/i18n/language"
 	"gopkg.in/fatih/set.v0"
+	"gopkg.in/yaml.v2"
 )
 
 var _ i18nmod.Backend = &Backend{}
@@ -25,13 +26,13 @@ func New() *Backend {
 type FileReader func(name string) ([]byte, error)
 
 type File struct {
-	Path string
+	Path   string
 	Reader FileReader
 }
 
 // Backend YAML backend
 type Backend struct {
-	files    map[string]map[string][]*File
+	files map[string]map[string][]*File
 }
 
 func loadPluralizableValue(scope []string, parentkey string, value yaml.MapSlice) (map[interface{}]interface{}, error) {
@@ -47,7 +48,7 @@ func loadPluralizableValue(scope []string, parentkey string, value yaml.MapSlice
 					strings.Join(scope, "."), parentkey, key, err)
 			}
 
-			key = key[0:len(key)-1]
+			key = key[0 : len(key)-1]
 
 			if i, err := strconv.Atoi(key); err == nil {
 				mp[i] = v.Executor()
@@ -71,7 +72,7 @@ func loadTranslationsFromYaml(file *string, value interface{}, scopes []string) 
 			if strings.HasSuffix(key, "*") {
 				switch mps := e.Value.(type) {
 				case yaml.MapSlice:
-					key := key[0: len(key)-1]
+					key := key[0 : len(key)-1]
 					pValue, err := loadPluralizableValue(scopes, key, mps)
 
 					if err != nil {
@@ -95,7 +96,7 @@ func loadTranslationsFromYaml(file *string, value interface{}, scopes []string) 
 	case string:
 		key := scopes[len(scopes)-1]
 		if strings.HasSuffix(key, "~") {
-			key = key[0: len(key)-1]
+			key = key[0 : len(key)-1]
 			scopes[len(scopes)-1] = key
 
 			t, err := template.New("").Parse(v)
@@ -112,7 +113,7 @@ func loadTranslationsFromYaml(file *string, value interface{}, scopes []string) 
 				Source:        file,
 			})
 		} else if strings.HasSuffix(key, "@") {
-			key = key[0: len(key)-1]
+			key = key[0 : len(key)-1]
 			scopes[len(scopes)-1] = key
 
 			translations = append(translations, &i18nmod.Translation{
@@ -195,7 +196,7 @@ func (backend *Backend) ListGroups() []string {
 }
 
 func (backend *Backend) ListLanguages() (langs []string) {
-	st := set.New()
+	st := set.New(set.NonThreadSafe)
 	for group := range backend.files {
 		for lang := range backend.files[group] {
 			st.Add(lang)
@@ -210,7 +211,7 @@ func (backend *Backend) ListLanguages() (langs []string) {
 	return langs
 }
 
-func (backend *Backend) AddFileToGroup(group string, reader FileReader, files ... string) error {
+func (backend *Backend) AddFileToGroup(group string, reader FileReader, files ...string) error {
 	for _, f := range files {
 		basename := filepath.Base(f)
 		langs := language.Parse(basename)
