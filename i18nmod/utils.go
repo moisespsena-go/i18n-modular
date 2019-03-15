@@ -1,13 +1,15 @@
 package i18nmod
 
 import (
-	"strings"
-	"github.com/pkg/errors"
 	"fmt"
-	"reflect"
 	"io/ioutil"
 	"path/filepath"
+	"reflect"
+	"strings"
+
+	"github.com/moisespsena/go-path-helpers"
 	"github.com/moisespsena/template/text/template"
+	"github.com/pkg/errors"
 )
 
 func getExtension(fileName string) (extension string, err error) {
@@ -20,10 +22,10 @@ func getExtension(fileName string) (extension string, err error) {
 	return
 }
 
-func Walk(name string, path string, cb func(key string, items []string) error) (err error) {
+func WalkDir(name string, path string, cb func(key string, items []string) error) (err error) {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		return fmt.Errorf("i18nmod.Walk: Failed to scan '", path, "': ", err)
+		return fmt.Errorf("i18nmod.WalkDir: Failed to scan '", path, "': ", err)
 	}
 
 	var items []string
@@ -34,9 +36,9 @@ func Walk(name string, path string, cb func(key string, items []string) error) (
 
 		if f.IsDir() {
 			if name == "" {
-				err = Walk(fname, p, cb)
+				err = WalkDir(fname, p, cb)
 			} else {
-				err = Walk(name+":"+fname, p, cb)
+				err = WalkDir(name+":"+fname, p, cb)
 			}
 			if err != nil {
 				return err
@@ -69,7 +71,7 @@ func PkgToGroup(pkgPath string, sub ...string) string {
 }
 
 func StructGroup(value interface{}) string {
-	pkgPath := reflect.TypeOf(value).Elem().PkgPath()
+	pkgPath := path_helpers.PkgPathOf(value)
 	return PkgToGroup(pkgPath, ModelType(value).Name())
 }
 

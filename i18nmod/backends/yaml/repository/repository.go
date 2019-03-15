@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/moisespsena/go-assetfs"
-	aapi "github.com/moisespsena/go-assetfs/api"
+	"github.com/moisespsena/go-assetfs/assetfsapi"
 	"github.com/moisespsena/go-assetfs/repository"
 	rapi "github.com/moisespsena/go-assetfs/repository/api"
 	"github.com/moisespsena/go-default-logger"
@@ -36,31 +36,35 @@ type AssetFSPlugin struct {
 	Prefix  string
 }
 
-func (p *AssetFSPlugin) Init(fs aapi.Interface) {
+func (p *AssetFSPlugin) Init(fs assetfsapi.Interface) {
+	p.LoadFileSystem(fs)
 }
 
 var Pattern = assetfs.NewGlobPattern(">\f{*.yml,*.yaml}")
 
-func (p *AssetFSPlugin) load(basePth string, info aapi.FileInfo) error {
+func (p *AssetFSPlugin) load(basePth string, info assetfsapi.FileInfo) error {
 	pth := filepath.Join(basePth, info.Path())
 	group := i18nmod.FormatGroupName(strings.Replace(filepath.Dir(pth), string(os.PathSeparator), ":", -1))
 	log.Debug("+", group, "-->", info)
-	return p.Backend.AddFileToGroup(group, func(name string) ([]byte, error) {
-		return info.Data()
-	}, info.Path())
+	return p.Backend.AddFileToGroup(group, info.Data, info.Path())
 }
-func (p *AssetFSPlugin) LoadFileSystem(fs aapi.Interface) error {
-	basePth := strings.TrimPrefix(fs.GetPath(), p.Prefix+string(os.PathSeparator))
-	log.Debug(basePth)
-	if basePth != "" && basePth[0] == filepath.Separator {
-		basePth = basePth[1:]
+func (p *AssetFSPlugin) LoadFileSystem(fs assetfsapi.Interface) error {
+	basePth := fs.GetPath()
+	if basePth == p.Prefix {
+		basePth = ""
+	} else {
+		basePth = strings.TrimPrefix(basePth, p.Prefix+string(os.PathSeparator))
+		log.Debug(basePth)
+		if basePth != "" && basePth[0] == filepath.Separator {
+			basePth = basePth[1:]
+		}
 	}
-	return fs.NewGlob(Pattern).Info(func(info aapi.FileInfo) error {
+	return fs.NewGlob(Pattern).Info(func(info assetfsapi.FileInfo) error {
 		return p.load(basePth, info)
 	})
 }
 
-func (p *AssetFSPlugin) PathRegisterCallback(fs aapi.Interface) {
+func (p *AssetFSPlugin) PathRegisterCallback(fs assetfsapi.Interface) {
 	err := p.LoadFileSystem(fs)
 	if err != nil {
 		panic(fmt.Errorf("AssetFSPlugin.PathRegisterCallback failed: %v", err))

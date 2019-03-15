@@ -2,28 +2,29 @@ package i18nmod
 
 import (
 	"bytes"
-	"fmt"
 	"errors"
+	"fmt"
 
 	"github.com/moisespsena/template/text/template"
 )
 
 type Translation struct {
+	Group         *string
 	Key           string
 	Value         string
 	ValueTemplate *template.Executor
-	PluralizeData map[interface{}]interface{}
+	Plural        *Plural
 	Source        *string
 	Alias         string
 	TemplateCache *template.Executor
 }
 
-
-func (t *Translation) PluralizeValue(count int, data interface{}) string {
-	v, ok := t.PluralizeData[count]
+func (t *Translation) Pluralize(count interface{}, data interface{}) string {
+	v, ok := t.Plural.Find(count)
 	if !ok {
-		v = t.PluralizeData["_"]
+		return ""
 	}
+
 	if tpl, ok := v.(*template.Executor); ok {
 		var buf bytes.Buffer
 
@@ -40,21 +41,15 @@ func (t *Translation) PluralizeValue(count int, data interface{}) string {
 	return v.(string)
 }
 
-func (t *Translation) Plural() string {
-	if v, ok := t.PluralizeData["p"]; ok {
-		return v.(string)
-	}
-	return t.PluralizeData["_"].(string)
+func (t *Translation) PluralValue() string {
+	return t.Plural.MustFind("p").(string)
 }
 
-func (t *Translation) Singular() string {
-	if v, ok := t.PluralizeData["s"]; ok {
-		return v.(string)
-	}
-	return t.PluralizeData["_"].(string)
+func (t *Translation) SingularValue() string {
+	return t.Plural.MustFind("s").(string)
 }
 
-func (t *Translation) Translate(tl *T, r *Result) {
+func (t *Translation) Translate(lang string, tl *T, r *Result) {
 	r.Translation = t
 
 	if t.Alias != "" {
@@ -102,20 +97,20 @@ func (t *Translation) Translate(tl *T, r *Result) {
 			return
 		}
 
-		r.Text = buf.String()
+		r.value = buf.String()
 		return
 	} else {
-		if t.PluralizeData != nil {
-			if tl.CountValue != -1 {
-				r.Text = t.PluralizeValue(tl.CountValue, tl.DefaultValue)
+		if t.Plural != nil {
+			if tl.CountValue != nil {
+				r.value = t.Pluralize(tl.CountValue, tl.DataValue)
 			} else if tl.Key.IsSingular {
-				r.Text = t.Singular()
-				return
+				r.value = t.SingularValue()
 			} else if tl.Key.IsPlural {
-				r.Text = t.Plural()
-				return
+				r.value = t.PluralValue()
+			} else {
+				r.Error = errors.New("error: isn't singular or Plural or not have count value")
 			}
-			r.Error = errors.New("error: isn't singular or plural or not have count value")
+			return
 		} else if t.ValueTemplate != nil {
 			var buf bytes.Buffer
 			var err error
@@ -131,10 +126,10 @@ func (t *Translation) Translate(tl *T, r *Result) {
 				return
 			}
 
-			r.Text = buf.String()
+			r.value = buf.String()
 			return
 		}
-		r.Text = t.Value
+		r.value = t.Value
 	}
 	return
 }

@@ -1,12 +1,12 @@
 package app
 
 import (
-
-	"github.com/theplant/cldr"
 	"fmt"
+
+	"github.com/moisespsena/go-assetfs"
 	"github.com/moisespsena/go-assetfs/repository"
 	"github.com/moisespsena/go-i18n-modular/i18nmod"
-	"github.com/moisespsena/go-assetfs"
+	"github.com/theplant/cldr"
 )
 
 func Init(fs assetfs.Interface, repo repository.Interface) {

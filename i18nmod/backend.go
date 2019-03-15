@@ -5,7 +5,7 @@ package i18nmod
 type Backend interface {
 	ListGroups() []string
 	ListLanguages() []string
-	LoadTranslations(lang string, group string) ([]*Translation, error)
+	LoadTranslations(lang string, group string) (*Tree, error)
 	SaveTranslation(*Translation) error
 	DeleteTranslation(*Translation) error
 }

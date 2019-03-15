@@ -3,18 +3,24 @@
 package main
 
 import (
-	"github.com/moisespsena/go-i18n-modular/setup"
+	"fmt"
+	"github.com/moisespsena/go-i18n-modular/i18nmod/backends/yaml"
+	"github.com/theplant/cldr"
+
+	"github.com/moisespsena/go-i18n-modular/i18nmod"
 )
 
 func main() {
-	cmd.Setup()
-	/*
 	cldr.RegisterLocale(&cldr.Locale{Locale: "pt-br"})
-	backend := locales.Backend
-	fs := locales.FS
-	locales.LoadDir("test_data")
-	fs.Init("locales")
 	tr := i18nmod.NewTranslator()
+	backend := yaml.New()
+	backend.AddInput("g1", "_", func() (bytes []byte, e error) {
+		return []byte(`a:
+  name*:
+    p: plural
+    s: singular
+b&: a`), nil
+	})
 	tr.AddBackend(backend)
 
 	err := tr.Preload([]string{})
@@ -23,6 +29,5 @@ func main() {
 	}
 
 	ctx := tr.NewContext("pt-BR")
-	fmt.Println(ctx.T("g1.name").Get())
-	*/
+	fmt.Println(ctx.T("g1.a.name~p").Get())
 }

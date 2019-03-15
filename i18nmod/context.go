@@ -5,7 +5,7 @@ type Context interface {
 	AddNotFoundHandler(func(handler *Handler, t *T)) Context
 	AddHandler(HandlerFunc) Context
 	Handler() *Handler
-	Langs() []string
+	Locales() []string
 	T(key string) *T
 	TT(key string) *T
 }

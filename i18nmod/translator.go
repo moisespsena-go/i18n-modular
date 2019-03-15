@@ -2,12 +2,8 @@ package i18nmod
 
 import (
 	"fmt"
-	"io"
-	"reflect"
-	"strconv"
 	"sync"
 
-	"github.com/moisespsena/template/common"
 	"github.com/moisespsena/template/html/template"
 	"gopkg.in/fatih/set.v0"
 )
@@ -15,9 +11,11 @@ import (
 type Translator struct {
 	Backends                 []Backend
 	Groups                   map[string]map[string]map[string]*Translation
-	ContextFactory           func(t *Translator, translate TranslateFunc, lang string, other_langs ...string) Context
+	ContextFactory           func(t *Translator, translate TranslateFunc, locale string, defaultLocale ...string) Context
 	OnContextCreateCallbacks []func(context Context)
 	Cache                    *Cache
+	Locales                  []string
+	DefaultLocale            string
 	sync.RWMutex
 }
 
@@ -39,41 +37,45 @@ func (t *Translator) AddBackend(backends ...Backend) {
 	t.Backends = append(t.Backends, backends...)
 }
 
-func (t *Translator) LoadGroupTranslations(lang string, group string) (map[string]*Translation, error) {
-	itemsMap := make(map[string]*Translation)
+func (tr *Translator) LoadGroupTranslations(locale string, group string) (items map[string]*Translation, err error) {
+	tree := &Tree{}
 
-	for _, bc := range t.Backends {
-		items, err := bc.LoadTranslations(lang, group)
+	for _, bc := range tr.Backends {
+		t, err := bc.LoadTranslations(locale, group)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to load group '%v' translations of '%v' language: %v", group, lang, err)
+			return nil, fmt.Errorf("Failed to load group '%v' translations of '%v' locale: %v", group, locale, err)
 		}
-		for _, item := range items {
-			item.Key = group + "." + item.Key
-			if _, ok := itemsMap[item.Key]; !ok {
-				itemsMap[item.Key] = item
-			}
-		}
+		tree.Merge(t)
 	}
 
-	return itemsMap, nil
+	items = map[string]*Translation{}
+
+	_ = tree.WalkT(func(key string, t *Translation) error {
+		t.Key = key
+		t.Group = &group
+		items[key] = t
+		return nil
+	})
+
+	return
 }
 
 func (t *Translator) PreloadAll() error {
 	return t.Preload([]string{})
 }
 
-func (t *Translator) Preload(languages []string, names ...string) error {
-	if len(languages) == 0 {
+func (t *Translator) Preload(locales []string, names ...string) error {
+	if len(locales) == 0 {
 		mn := set.New(set.ThreadSafe)
 		for _, backend := range t.Backends {
 			for _, lang := range backend.ListLanguages() {
 				mn.Add(lang)
 			}
 		}
-		languages = make([]string, mn.Size())
+		locales = make([]string, mn.Size())
 		i := 0
 		mn.Each(func(item interface{}) bool {
-			languages[i] = item.(string)
+			locales[i] = item.(string)
 			i++
 			return true
 		})
@@ -103,7 +105,7 @@ func (t *Translator) Preload(languages []string, names ...string) error {
 		if _, ok := t.Groups[name]; !ok {
 			t.Groups[name] = make(map[string]map[string]*Translation)
 		}
-		for _, lang := range languages {
+		for _, lang := range locales {
 			items, err := t.LoadGroupTranslations(lang, name)
 
 			if err != nil {
@@ -125,8 +127,8 @@ func (t *Translator) Preload(languages []string, names ...string) error {
 	return nil
 }
 
-func (t *Translator) NewContext(lang string, other_langs ...string) (c Context) {
-	c = t.ContextFactory(t, t.Translate, lang, other_langs...)
+func (t *Translator) NewContext(lang string, defaultLocale ...string) (c Context) {
+	c = t.ContextFactory(t, t.Translate, lang, append(defaultLocale, AnyLang)...)
 	for _, cb := range t.OnContextCreateCallbacks {
 		cb(c)
 	}
@@ -134,110 +136,62 @@ func (t *Translator) NewContext(lang string, other_langs ...string) (c Context) 
 }
 
 func (t *Translator) Translate(tl *T) (r *Result) {
-	key := tl.Key.Key
-	r = &Result{Text: tl.DefaultValue}
-	if r.Text == "" {
-		r.Text = key
+	r = &Result{}
+	if tl.DefaultValue != nil {
+		r.defaultValue = tl.DefaultValue
+	} else {
+		r.defaultValue = tl.Key.Key
 	}
 
-	for _, lang := range tl.Langs {
+	name := tl.Key.Name()
+
+	for _, lang := range tl.Locales {
 		if group, ok := t.Groups[tl.Key.GroupName]; ok {
-			if _, ok := group[lang]; ok {
-				if tn, ok := t.Groups[tl.Key.GroupName][lang][key]; ok {
-					tn.Translate(tl, r)
+			if data, ok := group[lang]; ok {
+				if tn, ok := data[name]; ok {
+					tn.Translate(lang, tl, r)
 					return
 				}
 			}
 		}
 	}
 
-	if tl.AsTemplateResult && tl.DefaultValue != "" {
-		tpl, err := template.New(tl.Key.Key).Parse(tl.DefaultValue)
+	if tl.AsTemplateResult {
+		var exec *template.Executor
+		switch dvt := tl.DefaultValue.(type) {
+		case string:
+			tpl, err := template.New(tl.Key.Key).Parse(dvt)
+			if err != nil {
+				r.Error = err
+				return
+			}
+			exec = tpl.CreateExecutor()
+		case *template.Template:
+			exec = dvt.CreateExecutor()
+		case *template.Executor:
+			exec = dvt
+		default:
+			r.Error = fmt.Errorf("Invalid template value of %q", tl.Key.Key)
+			return
+		}
+		data, err := exec.ExecuteString(tl.DataValue)
 		if err != nil {
 			r.Error = err
 			return
 		}
-		data, err := tpl.ExecuteString(tl.DataValue)
-		if err != nil {
-			r.Error = err
-			return
-		}
-		r.Text = data
+		r.value = data
 	}
 
 	return
 }
 
-func (t *Translator) Dump(writer io.Writer) {
-	d := &Dumper{Writer: writer}
-
-	d.
-		Wl("import (").
-		With(func(d *Dumper) {
-			d.
-				Wl("\"", reflect.TypeOf(t).Elem().PkgPath(), "\"")
-		}).
-		Wl(")").
-		Wl("func Groups() map[string]map[string]map[string]*i18nmod.Translation {").
-		With(func(d *Dumper) {
-			d.Wl("return map[string]map[string]map[string]*i18nmod.Translation {").With(func(d *Dumper) {
-				for gname, langs := range t.Groups {
-					d.Wl("\"", gname, "\": {").
-						With(func(d *Dumper) {
-							for lang, tls := range langs {
-								d.Wl("\"", lang, "\": {").
-									With(func(d *Dumper) {
-										for _, tl := range tls {
-											d.Wl("\"", tl.Key, "\": &i18nmod.Translation{").
-												With(func(d *Dumper) {
-													d.Wl("Key: \"", tl.Key, "\",")
-
-													if tl.Value != "" {
-														d.Wl("Value: ", strconv.Quote(tl.Value), ",")
-													} else if tl.ValueTemplate != nil {
-														d.Wl("ValueTemplate: i18nmod.ParseTemplate(", strconv.Quote(tl.ValueTemplate.Template().RawText()), "),")
-													}
-
-													if tl.Alias != "" {
-														d.Wl("Alias: \"", tl.Alias, "\",")
-													}
-
-													if tl.PluralizeData != nil {
-														d.Wl("PluralizeData: map[interface{}]interface{} {").
-															With(func(d *Dumper) {
-																for k, v := range tl.PluralizeData {
-																	d.W()
-																	switch kv := k.(type) {
-																	case string:
-																		d.R("\"", kv, "\":")
-																	case int:
-																		d.R(strconv.Itoa(kv), ":")
-																	}
-
-																	switch vv := v.(type) {
-																	case string:
-																		d.R(strconv.Quote(vv))
-																	case common.TemplateExecutorInterface:
-																		d.R("i18nmod.ParseTemplate(", strconv.Quote(vv.Template().RawText()), ")")
-																	}
-
-																	d.R(",\n")
-																}
-															}).
-															Wl("},")
-													}
-
-												}).
-												Wl("},")
-										}
-									}).
-									Wl("},")
-							}
-						}).
-						Wl("},")
-				}
-			}).
-				Wl("}")
-		}).
-		Wl("}")
+func (tr *Translator) ValidOrDefaultLocale(l string) string {
+	if l != "" {
+		for _, loc := range tr.Locales {
+			if l == loc {
+				return l
+			}
+		}
+	}
+	return tr.DefaultLocale
 }

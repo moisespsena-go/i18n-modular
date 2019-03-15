@@ -1,9 +1,10 @@
 package i18nmod
 
 import (
-	"strings"
 	"fmt"
 	html "html/template"
+	"strings"
+
 	"github.com/moisespsena/template/funcs"
 )
 
@@ -17,6 +18,13 @@ type Key struct {
 
 func (k *Key) Stringfy() string {
 	return k.Key
+}
+
+func (k *Key) Name() string {
+	if k.GroupName == "" {
+		return k.Key
+	}
+	return strings.TrimPrefix(k.Key, k.GroupName+".")
 }
 
 func (k *Key) Plural() *Key {
@@ -41,16 +49,16 @@ func NewKey(key string, prev *Key) *Key {
 	var singular bool
 	if strings.HasSuffix(key, "+") {
 		plural = true
-		key = key[0:len(key)-1]
+		key = key[0 : len(key)-1]
 	} else if strings.HasSuffix(key, "~p") {
 		plural = true
-		key = key[0:len(key)-2]
+		key = key[0 : len(key)-2]
 	} else if strings.HasSuffix(key, "-") {
 		singular = true
-		key = key[0:len(key)-1]
+		key = key[0 : len(key)-1]
 	} else if strings.HasSuffix(key, "~s") {
 		singular = true
-		key = key[0:len(key)-2]
+		key = key[0 : len(key)-2]
 	}
 
 	return &Key{Key: key, GroupName: groupName, Prev: prev, IsPlural: plural, IsSingular: singular}
@@ -58,37 +66,38 @@ func NewKey(key string, prev *Key) *Key {
 
 type T struct {
 	Handler          *Handler
-	Langs            []string
+	Locales          []string
 	Key              *Key
 	Group            string
-	DefaultValue     string
+	DefaultValue     interface{}
 	DataValue        interface{}
-	CountValue       int
+	CountValue       interface{}
 	AsTemplateResult bool
 	funcMaps         []funcs.FuncMap
 	funcValues       []*funcs.FuncValues
 }
 
 func NewT(context Context, key string) *T {
-	return &T{Handler: context.Handler(), Langs: context.Langs(), Key: NewKey(key, nil), CountValue: -1,
+	return &T{Handler: context.Handler(), Locales: context.Locales(), Key: NewKey(key, nil),
 		DefaultValue: key}
 }
 
-func (t *T) Funcs(funcMaps... funcs.FuncMap) *T {
+func (t *T) Funcs(funcMaps ...funcs.FuncMap) *T {
 	t.funcMaps = funcMaps
 	return t
 }
-func (t *T) FuncValues(funcValues... *funcs.FuncValues) *T {
+func (t *T) FuncValues(funcValues ...*funcs.FuncValues) *T {
 	t.funcValues = funcValues
 	return t
 }
 
-func (t *T) Count(value int) *T {
+func (t *T) Count(value interface{}) *T {
 	t.CountValue = value
 	return t
 }
 
-func (t *T) Plural(value int) *T {
+func (t *T) Plural(value interface{}) *T {
+	t.CountValue = value
 	t.Key.Plural()
 	return t
 }
@@ -106,12 +115,12 @@ func (t *T) With(key string) *T {
 	return t
 }
 
-func (t *T) Default(value string) *T {
+func (t *T) Default(value interface{}) *T {
 	t.DefaultValue = value
 	return t
 }
 
-func (t *T) DefaultArgs(values... string) *T {
+func (t *T) DefaultArgs(values ...interface{}) *T {
 	if len(values) > 0 {
 		t.DefaultValue = values[0]
 	}
@@ -123,7 +132,7 @@ func (t *T) Data(value interface{}) *T {
 	return t
 }
 
-func (t *T) DefaultAndDataFromArgs(args ... interface{}) *T {
+func (t *T) DefaultAndDataFromArgs(args ...interface{}) *T {
 	if len(args) > 0 {
 		t.DataValue = args[0].(string)
 		args = args[1:]
@@ -162,7 +171,26 @@ func (t *T) Get() string {
 		return fmt.Sprint("ERROR: ", r.Error)
 	}
 
-	return r.Text
+	if r.value == nil {
+		if r.defaultValue != nil {
+			switch dvt := r.defaultValue.(type) {
+			case func() string:
+				r.value = dvt()
+			default:
+				r.value = dvt
+			}
+		}
+	}
+
+	if r.value == nil {
+		return ""
+	}
+
+	if s, ok := r.value.(string); ok {
+		return s
+	}
+
+	return fmt.Sprint(r.value)
 }
 
 func (t *T) GetText() string {
@@ -174,8 +202,9 @@ func (t *T) GetHtml() html.HTML {
 }
 
 type Result struct {
-	Text        string
-	Alias       string
-	Error       error
-	Translation *Translation
+	defaultValue interface{}
+	value        interface{}
+	Alias        string
+	Error        error
+	Translation  *Translation
 }
