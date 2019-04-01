@@ -5,7 +5,7 @@ import (
 
 	"github.com/moisespsena-go/proc"
 
-	"github.com/moisespsena/go-default-logger"
+	"github.com/moisespsena-go/default-logger"
 )
 
 func main() {

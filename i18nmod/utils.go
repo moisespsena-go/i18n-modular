@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/moisespsena/go-path-helpers"
+	"github.com/moisespsena-go/path-helpers"
 	"github.com/moisespsena/template/text/template"
 	"github.com/pkg/errors"
 )

@@ -10,11 +10,11 @@ import (
 	"github.com/moisespsena/go-assetfs/assetfsapi"
 	"github.com/moisespsena/go-assetfs/repository"
 	rapi "github.com/moisespsena/go-assetfs/repository/api"
-	"github.com/moisespsena/go-default-logger"
+	"github.com/moisespsena-go/default-logger"
 	"github.com/moisespsena/go-i18n-modular/i18nmod"
 	"github.com/moisespsena/go-i18n-modular/i18nmod/backends/yaml"
 	"github.com/moisespsena/go-i18n-modular/i18nmod/backends/yaml/repository/templates"
-	"github.com/moisespsena/go-path-helpers"
+	"github.com/moisespsena-go/path-helpers"
 )
 
 var log = defaultlogger.NewLogger(path_helpers.GetCalledDir())
