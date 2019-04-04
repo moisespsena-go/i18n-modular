@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/moisespsena/go-i18n-modular/i18nmod"
+	"github.com/moisespsena-go/i18n-modular/i18nmod"
 	"github.com/moisespsena/template/text/template"
 	"github.com/nicksnyder/go-i18n/i18n/language"
 	"gopkg.in/fatih/set.v0"

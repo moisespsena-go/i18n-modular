@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/moisespsena/go-i18n-modular/cmd/init_"
+	"github.com/moisespsena-go/i18n-modular/cmd/init_"
 )
 
 func main() {

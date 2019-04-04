@@ -10,7 +10,7 @@ import (
 	"strings"
 	_ "unsafe"
 	"path/filepath"
-	"github.com/moisespsena/go-assetfs"
+	"github.com/moisespsena-go/assetfs"
 
 )
 

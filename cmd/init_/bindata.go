@@ -3,7 +3,7 @@
 package init_
 
 import (
-	"github.com/moisespsena/go-i18n-modular/repository"
+	"github.com/moisespsena-go/i18n-modular/repository"
 )
 
 func Main() {

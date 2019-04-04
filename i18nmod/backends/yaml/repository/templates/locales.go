@@ -3,8 +3,8 @@ package templates
 func Locales(prefix string) string {
 	d := `package {{.Package}}
 import (
-	"github.com/moisespsena/go-i18n-modular/i18nmod/backends/yaml"
-	"github.com/moisespsena/go-i18n-modular/i18nmod/backends/yaml/repository"
+	"github.com/moisespsena-go/i18n-modular/i18nmod/backends/yaml"
+	"github.com/moisespsena-go/i18n-modular/i18nmod/backends/yaml/repository"
 )
 
 var (

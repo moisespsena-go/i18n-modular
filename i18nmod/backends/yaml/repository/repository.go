@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/moisespsena/go-assetfs"
-	"github.com/moisespsena/go-assetfs/assetfsapi"
-	"github.com/moisespsena/go-assetfs/repository"
-	rapi "github.com/moisespsena/go-assetfs/repository/api"
+	"github.com/moisespsena-go/assetfs"
+	"github.com/moisespsena-go/assetfs/assetfsapi"
+	"github.com/moisespsena-go/assetfs/repository"
+	rapi "github.com/moisespsena-go/assetfs/repository/api"
 	"github.com/moisespsena-go/default-logger"
-	"github.com/moisespsena/go-i18n-modular/i18nmod"
-	"github.com/moisespsena/go-i18n-modular/i18nmod/backends/yaml"
-	"github.com/moisespsena/go-i18n-modular/i18nmod/backends/yaml/repository/templates"
+	"github.com/moisespsena-go/i18n-modular/i18nmod"
+	"github.com/moisespsena-go/i18n-modular/i18nmod/backends/yaml"
+	"github.com/moisespsena-go/i18n-modular/i18nmod/backends/yaml/repository/templates"
 	"github.com/moisespsena-go/path-helpers"
 )
 

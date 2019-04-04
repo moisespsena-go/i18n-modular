@@ -4,10 +4,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/moisespsena/go-i18n-modular/i18nmod/backends/yaml"
+	"github.com/moisespsena-go/i18n-modular/i18nmod/backends/yaml"
 	"github.com/theplant/cldr"
 
-	"github.com/moisespsena/go-i18n-modular/i18nmod"
+	"github.com/moisespsena-go/i18n-modular/i18nmod"
 )
 
 func main() {

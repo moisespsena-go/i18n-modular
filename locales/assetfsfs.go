@@ -3,7 +3,7 @@
 package locales
 
 import (
-	"github.com/moisespsena/go-assetfs"
+	"github.com/moisespsena-go/assetfs"
 )
 
 var (
