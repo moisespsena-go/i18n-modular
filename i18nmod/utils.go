@@ -70,6 +70,10 @@ func PkgToGroup(pkgPath string, sub ...string) string {
 	return strings.Join(append(p, sub...), ":")
 }
 
+func AutoGroup() string {
+	return PkgToGroup(path_helpers.GetCalledDirUp(1))
+}
+
 func StructGroup(value interface{}) string {
 	pkgPath := path_helpers.PkgPathOf(value)
 	return PkgToGroup(pkgPath, ModelType(value).Name())

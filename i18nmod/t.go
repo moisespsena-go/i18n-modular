@@ -14,6 +14,7 @@ type Key struct {
 	Prev       *Key
 	IsSingular bool
 	IsPlural   bool
+	Cached     bool
 }
 
 func (k *Key) Stringfy() string {
@@ -38,6 +39,11 @@ func (k *Key) Singular() *Key {
 }
 
 func NewKey(key string, prev *Key) *Key {
+	var cached bool
+	if key[0] == '^' {
+		cached = true
+		key = key[1:]
+	}
 	pos := strings.Index(key, ".")
 	var groupName string
 
@@ -61,7 +67,14 @@ func NewKey(key string, prev *Key) *Key {
 		key = key[0 : len(key)-2]
 	}
 
-	return &Key{Key: key, GroupName: groupName, Prev: prev, IsPlural: plural, IsSingular: singular}
+	return &Key{
+		Key:        key,
+		GroupName:  groupName,
+		Prev:       prev,
+		IsPlural:   plural,
+		IsSingular: singular,
+		Cached:     cached,
+	}
 }
 
 type T struct {
@@ -74,19 +87,23 @@ type T struct {
 	CountValue       interface{}
 	AsTemplateResult bool
 	funcMaps         []funcs.FuncMap
-	funcValues       []*funcs.FuncValues
+	funcValues       []funcs.FuncValues
 }
 
 func NewT(context Context, key string) *T {
-	return &T{Handler: context.Handler(), Locales: context.Locales(), Key: NewKey(key, nil),
-		DefaultValue: key}
+	return &T{
+		Handler:      context.Handler(),
+		Locales:      context.Locales(),
+		Key:          NewKey(key, nil),
+		DefaultValue: key,
+	}
 }
 
 func (t *T) Funcs(funcMaps ...funcs.FuncMap) *T {
 	t.funcMaps = funcMaps
 	return t
 }
-func (t *T) FuncValues(funcValues ...*funcs.FuncValues) *T {
+func (t *T) FuncValues(funcValues ...funcs.FuncValues) *T {
 	t.funcValues = funcValues
 	return t
 }
@@ -201,10 +218,18 @@ func (t *T) GetHtml() html.HTML {
 	return html.HTML(t.Get())
 }
 
+func (t *T) String() string {
+	return t.Get()
+}
+
 type Result struct {
 	defaultValue interface{}
 	value        interface{}
 	Alias        string
 	Error        error
 	Translation  *Translation
+}
+
+func Cached(key string) string {
+	return "^" + key
 }

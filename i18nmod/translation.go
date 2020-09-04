@@ -26,30 +26,28 @@ func (t *Translation) Pluralize(count interface{}, data interface{}) string {
 	}
 
 	if tpl, ok := v.(*template.Executor); ok {
-		var buf bytes.Buffer
-
-		err := tpl.Execute(&buf, map[string]interface{}{
-			"Count": count,
-			"Data":  data,
+		s, err := tpl.ExecuteString(data, map[string]interface{}{
+			"count": func() interface{} {
+				return count
+			},
 		})
-
 		if err != nil {
 			return fmt.Sprint("Translation template error [%v]: %v", t.Key, err)
 		}
-		return buf.String()
+		return s
 	}
 	return v.(string)
 }
 
-func (t *Translation) PluralValue() string {
-	return t.Plural.MustFind("p").(string)
+func (t *Translation) PluralValue() interface{} {
+	return t.Plural.MustFind("p")
 }
 
-func (t *Translation) SingularValue() string {
-	return t.Plural.MustFind("s").(string)
+func (t *Translation) SingularValue() interface{} {
+	return t.Plural.MustFind("s")
 }
 
-func (t *Translation) Translate(lang string, tl *T, r *Result) {
+func (t *Translation) Translate(context Context, lang string, tl *T, r *Result) {
 	r.Translation = t
 
 	if t.Alias != "" {
@@ -61,7 +59,55 @@ func (t *Translation) Translate(lang string, tl *T, r *Result) {
 		return
 	}
 
-	if tl.AsTemplateResult {
+	if t.Plural != nil {
+		var value interface{}
+		if tl.CountValue != nil {
+			value = t.Pluralize(tl.CountValue, tl.DataValue)
+		} else if tl.Key.IsSingular {
+			value = t.SingularValue()
+		} else if tl.Key.IsPlural {
+			value = t.PluralValue()
+		} else {
+			r.Error = errors.New("error: isn't singular or Plural or not have count value")
+			return
+		}
+		switch vt := value.(type) {
+		case *template.Executor:
+			var data interface{}
+			if tfd, ok := tl.DataValue.(TemplateFuncsData); ok {
+				data = tfd.Data()
+				vt = vt.Funcs(tl.funcMaps...).Funcs(tfd.Funcs()).FuncsValues(tfd.FuncValues())
+			} else {
+				data = tl.DataValue
+				vt = vt.Funcs(tl.funcMaps...).FuncsValues(tl.funcValues...)
+			}
+
+			var err error
+			if r.value, err = vt.ExecuteString(data); err != nil {
+				r.Error = fmt.Errorf("Execute template failed: %v", err)
+			}
+		default:
+			r.value = vt.(string)
+		}
+		return
+	} else if t.ValueTemplate != nil {
+		var buf bytes.Buffer
+		var err error
+
+		if tfd, ok := tl.DataValue.(TemplateFuncsData); ok {
+			err = t.ValueTemplate.Funcs(tfd.Funcs()).Execute(&buf, tfd.Data())
+		} else {
+			err = t.ValueTemplate.Funcs(tl.funcMaps...).Execute(&buf, tl.DataValue)
+		}
+
+		if err != nil {
+			r.Error = err
+			return
+		}
+
+		r.value = buf.String()
+		return
+	} else if tl.AsTemplateResult || t.ValueTemplate != nil {
 		var tpl *template.Executor
 		if t.TemplateCache != nil {
 			tpl = t.TemplateCache
@@ -99,37 +145,7 @@ func (t *Translation) Translate(lang string, tl *T, r *Result) {
 
 		r.value = buf.String()
 		return
-	} else {
-		if t.Plural != nil {
-			if tl.CountValue != nil {
-				r.value = t.Pluralize(tl.CountValue, tl.DataValue)
-			} else if tl.Key.IsSingular {
-				r.value = t.SingularValue()
-			} else if tl.Key.IsPlural {
-				r.value = t.PluralValue()
-			} else {
-				r.Error = errors.New("error: isn't singular or Plural or not have count value")
-			}
-			return
-		} else if t.ValueTemplate != nil {
-			var buf bytes.Buffer
-			var err error
-
-			if tfd, ok := tl.DataValue.(TemplateFuncsData); ok {
-				err = t.ValueTemplate.Funcs(tfd.Funcs()).Execute(&buf, tfd.Data())
-			} else {
-				err = t.ValueTemplate.Funcs(tl.funcMaps...).Execute(&buf, tl.DataValue)
-			}
-
-			if err != nil {
-				r.Error = err
-				return
-			}
-
-			r.value = buf.String()
-			return
-		}
-		r.value = t.Value
 	}
+	r.value = t.Value
 	return
 }

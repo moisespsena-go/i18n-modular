@@ -4,27 +4,71 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/moisespsena/template/html/template"
 	"gopkg.in/fatih/set.v0"
+
+	"github.com/moisespsena/template/html/template"
 )
+
+type DB map[string]*Translation
+
+type ChildDB struct {
+	Group string
+	Prefix string
+	DB     DB
+}
+
+func (this ChildDB) With(prefix string, cb func(db *ChildDB)) {
+	this.Prefix += prefix + "."
+	cb(&this)
+}
+
+func (this *ChildDB) Get(key string) *Translation {
+	return this.DB[this.Prefix+key]
+}
+
+func (this *ChildDB) Set(t ...*Translation) *ChildDB {
+	for _, t := range t {
+		func(t Translation) {
+			t.Group = &this.Group
+			if this.Prefix != "" {
+				t.Key = this.Prefix + t.Key
+			}
+			this.DB[t.Key] = &t
+		}(*t)
+	}
+	return this
+}
 
 type Translator struct {
 	Backends                 []Backend
-	Groups                   map[string]map[string]map[string]*Translation
+	Groups                   map[string]map[string]DB
 	ContextFactory           func(t *Translator, translate TranslateFunc, locale string, defaultLocale ...string) Context
 	OnContextCreateCallbacks []func(context Context)
 	Cache                    *Cache
 	Locales                  []string
 	DefaultLocale            string
 	sync.RWMutex
+	preloaded           map[string]bool
+	groupLoadedCallback map[string][]func(lang string, db *ChildDB)
 }
 
 func NewTranslator() *Translator {
 	return &Translator{
-		Backends:       []Backend{},
-		ContextFactory: DefaultContextFactory,
-		Cache:          NewCache(),
+		Backends:                 []Backend{},
+		ContextFactory:           DefaultContextFactory,
+		Cache:                    NewCache(),
 		OnContextCreateCallbacks: []func(context Context){},
+		groupLoadedCallback:      make(map[string][]func(lang string, db *ChildDB)),
+		Groups:                   make(map[string]map[string]DB),
+	}
+}
+
+func (t *Translator) AfterGroupLoad(groupName string, cb func(lang string, db *ChildDB)) {
+	t.groupLoadedCallback[groupName] = append(t.groupLoadedCallback[groupName], cb)
+	if data, ok := t.Groups[groupName]; ok {
+		for lang, db := range data {
+			cb(lang, &ChildDB{groupName, "", db})
+		}
 	}
 }
 
@@ -37,7 +81,7 @@ func (t *Translator) AddBackend(backends ...Backend) {
 	t.Backends = append(t.Backends, backends...)
 }
 
-func (tr *Translator) LoadGroupTranslations(locale string, group string) (items map[string]*Translation, err error) {
+func (tr *Translator) LoadGroupTranslations(locale string, group string) (items DB, err error) {
 	tree := &Tree{}
 
 	for _, bc := range tr.Backends {
@@ -48,7 +92,7 @@ func (tr *Translator) LoadGroupTranslations(locale string, group string) (items 
 		tree.Merge(t)
 	}
 
-	items = map[string]*Translation{}
+	items = make(DB)
 
 	_ = tree.WalkT(func(key string, t *Translation) error {
 		t.Key = key
@@ -58,6 +102,34 @@ func (tr *Translator) LoadGroupTranslations(locale string, group string) (items 
 	})
 
 	return
+}
+
+func (tr *Translator) SetGroup(lang string, group string, tree *Tree) {
+	items := make(DB)
+
+	_ = tree.WalkT(func(key string, t *Translation) error {
+		t.Key = key
+		t.Group = &group
+		items[key] = t
+		return nil
+	})
+
+	if _, ok := tr.Groups[group]; !ok {
+		tr.Groups[group] = map[string]DB{}
+	}
+	tr.Groups[group][lang] = items
+
+	if callbacks := tr.groupLoadedCallback[group]; callbacks != nil {
+		for _, cb := range callbacks {
+			cb(lang, &ChildDB{Group: group, DB: tr.Groups[group][lang]})
+		}
+	}
+}
+
+func (tr *Translator) NewGroup(locale string, group string, cb func(t *Tree)) {
+	var tree Tree
+	cb(&tree)
+	tr.SetGroup(locale, group, &tree)
 }
 
 func (t *Translator) PreloadAll() error {
@@ -90,20 +162,24 @@ func (t *Translator) Preload(locales []string, names ...string) error {
 		}
 		names = make([]string, mn.Size())
 		i := 0
+		if t.preloaded == nil {
+			t.preloaded = map[string]bool{}
+		}
 		mn.Each(func(item interface{}) bool {
-			names[i] = item.(string)
+			name := item.(string)
+			if _, ok := t.preloaded[name]; ok {
+				return true
+			}
+			t.preloaded[name] = true
+			names[i] = name
 			i++
 			return true
 		})
 	}
 
-	if t.Groups == nil {
-		t.Groups = make(map[string]map[string]map[string]*Translation)
-	}
-
 	for _, name := range names {
 		if _, ok := t.Groups[name]; !ok {
-			t.Groups[name] = make(map[string]map[string]*Translation)
+			t.Groups[name] = make(map[string]DB)
 		}
 		for _, lang := range locales {
 			items, err := t.LoadGroupTranslations(lang, name)
@@ -122,6 +198,11 @@ func (t *Translator) Preload(locales []string, names ...string) error {
 				}
 			}
 
+			if callbacks := t.groupLoadedCallback[name]; callbacks != nil {
+				for _, cb := range callbacks {
+					cb(lang, &ChildDB{Group: name, DB: t.Groups[name][lang]})
+				}
+			}
 		}
 	}
 	return nil
@@ -135,7 +216,7 @@ func (t *Translator) NewContext(lang string, defaultLocale ...string) (c Context
 	return c
 }
 
-func (t *Translator) Translate(tl *T) (r *Result) {
+func (t *Translator) Translate(context Context, tl *T) (r *Result) {
 	r = &Result{}
 	if tl.DefaultValue != nil {
 		r.defaultValue = tl.DefaultValue
@@ -149,37 +230,85 @@ func (t *Translator) Translate(tl *T) (r *Result) {
 		if group, ok := t.Groups[tl.Key.GroupName]; ok {
 			if data, ok := group[lang]; ok {
 				if tn, ok := data[name]; ok {
-					tn.Translate(lang, tl, r)
+					tn.Translate(context, lang, tl, r)
 					return
 				}
 			}
 		}
 	}
 
-	if tl.AsTemplateResult {
-		var exec *template.Executor
-		switch dvt := tl.DefaultValue.(type) {
-		case string:
-			tpl, err := template.New(tl.Key.Key).Parse(dvt)
+	if tl.DefaultValue != nil {
+		if tl.AsTemplateResult {
+			var exec *template.Executor
+			switch dvt := tl.DefaultValue.(type) {
+			case string:
+				tpl, err := template.New(tl.Key.Key).Parse(dvt)
+				if err != nil {
+					r.Error = err
+					return
+				}
+				exec = tpl.CreateExecutor()
+			case *template.Template:
+				exec = dvt.CreateExecutor()
+			case *template.Executor:
+				exec = dvt
+			default:
+				r.Error = fmt.Errorf("Invalid template value of %q", tl.Key.Key)
+				return
+			}
+			data, err := exec.ExecuteString(tl.DataValue)
 			if err != nil {
 				r.Error = err
 				return
 			}
-			exec = tpl.CreateExecutor()
-		case *template.Template:
-			exec = dvt.CreateExecutor()
-		case *template.Executor:
-			exec = dvt
-		default:
-			r.Error = fmt.Errorf("Invalid template value of %q", tl.Key.Key)
-			return
+			r.value = data
+		} else {
+			var exec *template.Executor
+			switch dvt := tl.DefaultValue.(type) {
+			case string:
+				r.value = dvt
+				return
+			case template.HTML:
+				r.value = dvt
+				return
+			case *template.Template:
+				exec = dvt.CreateExecutor()
+			case *template.Executor:
+				exec = dvt
+			case func() string:
+				r.value = dvt()
+				return
+			case func() *T:
+				r.value = dvt().Get()
+				return
+			case func() template.HTML:
+				r.value = dvt()
+				return
+			case func() *template.Executor:
+				exec = dvt()
+			case func(Context) *T:
+				r.value = dvt(context).Get()
+				return
+			case func(Context) template.HTML:
+				r.value = dvt(context)
+				return
+			case func(Context) *template.Executor:
+				exec = dvt(context)
+			default:
+				r.Error = fmt.Errorf("Invalid default value of %q as %T = %s", tl.Key.Key, tl.DefaultValue, tl.DefaultValue)
+				return
+			}
+			dataValue := tl.DataValue
+			if dataValue == nil {
+				dataValue = map[interface{}]interface{}{}
+			}
+			data, err := exec.ExecuteString(tl.DataValue)
+			if err != nil {
+				r.Error = err
+				return
+			}
+			r.value = data
 		}
-		data, err := exec.ExecuteString(tl.DataValue)
-		if err != nil {
-			r.Error = err
-			return
-		}
-		r.value = data
 	}
 
 	return

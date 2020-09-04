@@ -8,28 +8,14 @@ import (
 
 	"github.com/moisespsena-go/assetfs"
 	"github.com/moisespsena-go/assetfs/assetfsapi"
-	"github.com/moisespsena-go/assetfs/repository"
-	rapi "github.com/moisespsena-go/assetfs/repository/api"
-	"github.com/moisespsena-go/default-logger"
+	"github.com/moisespsena-go/logging"
+	path_helpers "github.com/moisespsena-go/path-helpers"
+
 	"github.com/moisespsena-go/i18n-modular/i18nmod"
 	"github.com/moisespsena-go/i18n-modular/i18nmod/backends/yaml"
-	"github.com/moisespsena-go/i18n-modular/i18nmod/backends/yaml/repository/templates"
-	"github.com/moisespsena-go/path-helpers"
 )
 
-var log = defaultlogger.NewLogger(path_helpers.GetCalledDir())
-
-type RepositoryPlugin struct {
-	Prefix string
-}
-
-func (p *RepositoryPlugin) Init(repo rapi.Interface) {
-	log.Debug("init")
-}
-
-func (p *RepositoryPlugin) GetTemplates() (tpls []*repository.Template) {
-	return append(tpls, &repository.Template{"locale.go", templates.Locales(p.Prefix)})
-}
+var log = logging.GetOrCreateLogger(path_helpers.GetCalledDir())
 
 type AssetFSPlugin struct {
 	Backend *yaml.Backend
@@ -42,11 +28,13 @@ func (p *AssetFSPlugin) Init(fs assetfsapi.Interface) {
 
 var Pattern = assetfs.NewGlobPattern(">\f{*.yml,*.yaml}")
 
-func (p *AssetFSPlugin) load(basePth string, info assetfsapi.FileInfo) error {
+func (p *AssetFSPlugin) load(basePth string, info assetfsapi.FileInfo) (err error) {
 	pth := filepath.Join(basePth, info.Path())
 	group := i18nmod.FormatGroupName(strings.Replace(filepath.Dir(pth), string(os.PathSeparator), ":", -1))
 	log.Debug("+", group, "-->", info)
-	return p.Backend.AddFileToGroup(group, info.Data, info.Path())
+	return p.Backend.AddFileToGroup(group, func() ([]byte, error) {
+		return assetfs.Data(info)
+	}, info.Path())
 }
 func (p *AssetFSPlugin) LoadFileSystem(fs assetfsapi.Interface) error {
 	basePth := fs.GetPath()

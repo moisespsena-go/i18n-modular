@@ -71,7 +71,7 @@ type importer struct {
 
 func (i *importer) Add(t ...*i18nmod.Translation) {
 	for _, t := range t {
-		i.tree.Add(t.Key, t)
+		i.tree.Add(t)
 	}
 }
 

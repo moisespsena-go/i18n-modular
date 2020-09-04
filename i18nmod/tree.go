@@ -64,8 +64,8 @@ func (t *Tree) Tree(key string) *Tree {
 	return t
 }
 
-func (t *Tree) Add(key string, T *Translation) *Tree {
-	t = t.Tree(key)
+func (t *Tree) Add(T *Translation) *Tree {
+	t = t.Tree(T.Key)
 	t.T = T
 	return t
 }

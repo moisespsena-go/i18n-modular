@@ -4,34 +4,34 @@ import (
 	"fmt"
 )
 
-type pKeyCount struct {
-	cond   uint8
-	value  string
-	format string
+type PluralKeyCount struct {
+	Cond   uint8
+	Value  string
+	Format string
 }
 
-func (k pKeyCount) Accept(value interface{}) bool {
+func (k PluralKeyCount) Accept(value interface{}) bool {
 	var s string
-	if k.format == "" {
+	if k.Format == "" {
 		s = fmt.Sprint(value)
 	} else {
-		s = fmt.Sprintf(k.format, value)
+		s = fmt.Sprintf(k.Format, value)
 	}
-	switch k.cond {
+	switch k.Cond {
 	case '=':
-		return k.value == s
+		return k.Value == s
 	case '>':
-		return k.value > s
+		return k.Value > s
 	case '<':
-		return k.value < s
+		return k.Value < s
 	default:
 		return false
 	}
 }
 
 type Plural struct {
-	cases    map[interface{}]interface{}
-	expCases map[pKeyCount]interface{}
+	Cases    map[interface{}]interface{}
+	ExpCases map[PluralKeyCount]interface{}
 }
 
 func (p *Plural) AddCase(key, value interface{}) {
@@ -39,8 +39,8 @@ func (p *Plural) AddCase(key, value interface{}) {
 	case string:
 		switch kt[0] {
 		case '=', '>', '<':
-			if p.expCases == nil {
-				p.expCases = map[pKeyCount]interface{}{}
+			if p.ExpCases == nil {
+				p.ExpCases = map[PluralKeyCount]interface{}{}
 			}
 			v := kt[1:]
 			var format string
@@ -48,25 +48,62 @@ func (p *Plural) AddCase(key, value interface{}) {
 				format = v[:2]
 				v = v[2:]
 			}
-			p.expCases[pKeyCount{kt[0], v, format}] = value
+			p.ExpCases[PluralKeyCount{kt[0], v, format}] = value
 			return
 		}
 	}
 
-	if p.cases == nil {
-		p.cases = map[interface{}]interface{}{}
+	if p.Cases == nil {
+		p.Cases = map[interface{}]interface{}{}
 	}
 	switch key {
 	case "p":
-		if _, ok := p.cases["other"]; !ok {
-			p.cases["other"] = value
+		if _, ok := p.Cases["other"]; !ok {
+			p.Cases["other"] = value
 		}
 	case "s":
-		if _, ok := p.cases["one"]; !ok {
-			p.cases["one"] = value
+		if _, ok := p.Cases["one"]; !ok {
+			p.Cases["one"] = value
 		}
 	}
-	p.cases[key] = value
+	p.Cases[key] = value
+}
+
+func (p *Plural) SetCase(key, value interface{}) {
+	switch kt := key.(type) {
+	case string:
+		switch kt[0] {
+		case '=', '>', '<':
+			if p.ExpCases == nil {
+				p.ExpCases = map[PluralKeyCount]interface{}{}
+			}
+			v := kt[1:]
+			var format string
+			if v[0] == '%' {
+				format = v[:2]
+				v = v[2:]
+			}
+			p.ExpCases[PluralKeyCount{kt[0], v, format}] = value
+			return
+		}
+	}
+
+	if p.Cases == nil {
+		p.Cases = map[interface{}]interface{}{}
+	}
+	switch key {
+	case "p":
+		old := p.Cases[key]
+		if o, ok := p.Cases["other"]; !ok || (old != nil && o == old) {
+			p.Cases["other"] = value
+		}
+	case "s":
+		old := p.Cases[key]
+		if o, ok := p.Cases["one"]; !ok || (old != nil && o == old) {
+			p.Cases["one"] = value
+		}
+	}
+	p.Cases[key] = value
 }
 
 func (p *Plural) MustFind(count interface{}) (v interface{}) {
@@ -75,14 +112,14 @@ func (p *Plural) MustFind(count interface{}) (v interface{}) {
 }
 
 func (p *Plural) Find(count interface{}) (v interface{}, ok bool) {
-	if p.cases != nil {
-		if v, ok = p.cases[count]; ok {
+	if p.Cases != nil {
+		if v, ok = p.Cases[count]; ok {
 			return
 		}
 	}
-	if p.expCases != nil {
-		var k pKeyCount
-		for k, v = range p.expCases {
+	if p.ExpCases != nil {
+		var k PluralKeyCount
+		for k, v = range p.ExpCases {
 			if k.Accept(count) {
 				ok = true
 				return
@@ -90,9 +127,16 @@ func (p *Plural) Find(count interface{}) (v interface{}, ok bool) {
 		}
 	}
 
-	if p.cases != nil {
-		if v, ok = p.cases["other"]; ok {
-			return
+	if p.Cases != nil {
+		switch count {
+		case 1:
+			if v, ok = p.Cases["one"]; ok {
+				return
+			}
+		default:
+			if v, ok = p.Cases["other"]; ok {
+				return
+			}
 		}
 	}
 	v = nil

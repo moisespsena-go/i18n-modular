@@ -12,10 +12,10 @@ type ContextGroup struct {
 	Translator *Translator
 }
 
-type TranslateFunc func(tl *T) *Result
+type TranslateFunc func(ctx Context, tl *T) *Result
 
 type TemplateFuncsData interface {
 	Funcs() map[string]interface{}
-	FuncValues() *funcs.FuncValues
+	FuncValues() funcs.FuncValues
 	Data() interface{}
 }

@@ -1,11 +1,17 @@
 package i18nmod
 
+import (
+	"context"
+)
+
 type DefaultContext struct {
+	context.Context
 	Translator       *Translator
 	locales          []string
-	Groups           *map[string]map[string]map[string]*Translation
+	Groups           map[string]map[string]DB
 	FoundHandlers    []func(handler *Handler, r *Result)
 	NotFoundHandlers []func(handler *Handler, t *T)
+	cache            map[string]*Result
 	handler          *Handler
 	LogOkEnabled     bool
 	LogFaultEnabled  bool
@@ -42,6 +48,11 @@ func (c *DefaultContext) AddNotFoundHandler(handler func(handler *Handler, t *T)
 	return c
 }
 
+func (c DefaultContext) WithContext(ctx context.Context) Context {
+	c.Context = ctx
+	return &c
+}
+
 func DefaultContextFactory(t *Translator, translate TranslateFunc, lang string, defaultLocale ...string) Context {
 	var (
 		locales = []string{lang}
@@ -58,23 +69,33 @@ func DefaultContextFactory(t *Translator, translate TranslateFunc, lang string, 
 	}
 
 	c := &DefaultContext{
+		Context:    context.Background(),
 		Translator: t,
 		locales:    locales,
-		Groups:     &t.Groups,
+		Groups:     t.Groups,
+		cache:      map[string]*Result{},
 	}
 
-	c.AddHandler(func(handler *Handler, tl *T) *Result {
-		r := translate(tl)
+	c.AddHandler(func(handler *Handler, tl *T) (r *Result) {
+		if tl.Key.Cached {
+			if r = c.cache[tl.Key.Key]; r != nil {
+				return
+			}
+		}
+		r = translate(handler.Context, tl)
 		if r.Translation == nil {
 			for _, h := range c.NotFoundHandlers {
 				h(handler, tl)
 			}
 		} else {
+			if tl.Key.Cached {
+				c.cache[tl.Key.Key] = r
+			}
 			for _, h := range c.FoundHandlers {
 				h(handler, r)
 			}
 		}
-		return r
+		return
 	})
 	return c
 }
