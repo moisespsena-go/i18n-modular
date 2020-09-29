@@ -3,12 +3,12 @@ package yaml_test
 import (
 	"testing"
 
-	"github.com/aghape/i18n/backends/yaml"
+	"github.com/moisespsena-go/i18n-modular/i18nmod/backends/yaml"
 )
 
 func TestLoadTranslations(t *testing.T) {
-	backend := yaml.New("tests")
-	translations := backend.LoadTranslations()
+	backend := yaml.New()
+	backend.LoadDir("tests")
 
 	values := map[string][][]string{
 		"en": {
@@ -26,7 +26,7 @@ func TestLoadTranslations(t *testing.T) {
 	for locale, results := range values {
 		for _, result := range results {
 			var found bool
-			for _, translation := range translations {
+			for _, translation := range backend {
 				if (translation.Locale == locale) && (translation.Key == result[0]) && (translation.Value == result[1]) {
 					found = true
 				}
